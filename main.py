@@ -2,8 +2,6 @@
 from fastapi import FastAPI, HTTPException
 import pandas as pd
 import calendar
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 #se asigna FastAPI al variable app para un mejor manejo de codigo
 app=FastAPI() 
@@ -11,31 +9,6 @@ app=FastAPI()
 
 df=pd.read_csv('dataset.csv') # se lee el documento csv
 df['release_date'] = pd.to_datetime(df['release_date'], errors='coerce') #se cambia el formato de fecha para poder determinar los dias meses y años necesarios en las apis
-
-# esta parte de codigo es usada para el modelo de recomendacion usando la similitud del coseno 
-df2=df  #se genera una nueva variable con el dataframe
-#para el modelo de recomendacion se pretende utilizar las columnas overview y generos, esto permitira un mejor filtrado de peliculas similares
-df2['overview']=df2['overview'].fillna('') # se rellenan los elementos nulos o NaN
-df2['generos']=df2['generos'].fillna('')
-df2['combinados']=df2['overview']+" "+df2['generos'].apply(lambda x: " ".join(eval(x)))  # se crea una columna nueva con los valores de las columnas selccionadas 
-#esta union dara como resultado el texto encontrado en el overview y al final se encontraran los generos a los cuales pertenece esa pelicula
-
-tfidf=TfidfVectorizer(stop_words='english') #se guarda el metodo de vectorizado con la condicionante de que todas las palabras o conectores comunes del idioma ingles  se ignores
-tfidf_matrix=tfidf.fit_transform(df2['combinados']) #se aplica el metodo de vectorizado a la columna generada previamente
-similitud_coseno=cosine_similarity(tfidf_matrix, tfidf_matrix) #se genera la matriz de similutd del coseno, entre el valor sea mas cercano a 1 mas similares son
-
-def get_recomendacion(titulo): # funcion para obtener las 5 peliculas similares al titulo provisto
-    indice=df2.index[df2['title']==titulo].tolist() # se busca el indice del titulo ingresado
-    if not indice:  # si el titulo no existe no devuelve nada
-        return None
-    indice=indice[0]
-
-    similares=list(enumerate(similitud_coseno[indice])) # se busca los valores similares al indice obtenido
-    similares=sorted(similares, key=lambda x:x[1], reverse=True)[1:6] # se ordenan los resultados y se obtienen solo los 5 primeros (se coloca 1:6 porque el titulo provisto tambien puede salir como resultado, eso lo elimina de la lista
-    peliculas=[i[0] for i in similares] # se guardan los resultados de los indicees encontrados en la variable peliculas
-    pelis=df2['title'].iloc[peliculas].tolist() # se guardan los titulos de las peliculas
-    return pelis
-
 
 #api para obtener la cantidad de filmaciones por mes
 @app.get("/cantidad_filmaciones_mes/{mes}")
@@ -134,12 +107,3 @@ def get_director(director:str):
         raise HTTPException(status_code=400, detail="Nombre del director no valido") 
 
     return f" El director {director} ha tenido el siguiente exito: {dfdirector} "
-
-#api para obtener recomendacion de peliculas a partir de un titulo
-@app.get("/recomendacion/{titulo}")
-async def recomendacion(titulo: str): #se usa async para poder hacer en analisis de forma asincrna de la funcion previa y mejorar el rendimiento de la api
-    recomendaciones=get_recomendacion(titulo)  #se manda a llamar la funcion previamente descrita del modelo
-    if recomendaciones is None: #si no existe la pelicula se despliega el mensaje
-        raise HTTPException(status_code=404, detail="Pelicula no encontrada") 
-    return  f"Peliculas similares a {titulo} recomendadas: {recomendaciones}"  # resultado de titulos similares.
-#C:\Users\Jesus\Documents\Analisis de Datos\Proyecto\main.py
